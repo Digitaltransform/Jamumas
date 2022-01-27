@@ -1,0 +1,49 @@
+"""
+@generated
+cargo-raze generated Bazel file.
+
+DO NOT EDIT! Replaced on runs of cargo-raze
+"""
+
+package(default_visibility = ["//visibility:public"])
+
+licenses([
+    "notice",  # See individual crates for specific licenses
+])
+
+# Aliased targets
+alias(
+    name = "byteorder",
+    actual = "@raze__byteorder__1_3_4//:byteorder",
+    tags = [
+        "cargo-raze",
+        "manual",
+    ],
+)
+
+alias(
+    name = "crc",
+    actual = "@raze__crc__1_8_1//:crc",
+    tags = [
+        "cargo-raze",
+        "manual",
+    ],
+)
+
+alias(
+    name = "rand",
+    actual = "@raze__rand__0_7_3//:rand",
+    tags = [
+        "cargo-raze",
+        "manual",
+    ],
+)
+
+alias(
+    name = "rand_chacha",
+    actual = "@raze__rand_chacha__0_2_2//:rand_chacha",
+    tags = [
+        "cargo-raze",
+        "manual",
+    ],
+)
