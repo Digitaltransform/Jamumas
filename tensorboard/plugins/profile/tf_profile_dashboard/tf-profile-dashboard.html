@@ -1,0 +1,308 @@
+<!--
+@license
+Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<link rel="import" href="../paper-dropdown-menu/paper-dropdown-menu.html">
+<link rel="import" href="../paper-item/paper-item.html">
+<link rel="import" href="../paper-menu/paper-menu.html">
+<link rel="import" href="../polymer/polymer.html">
+<link rel="import" href="../tf-backend/tf-backend.html">
+<link rel="import" href="../tf-dashboard-common/tf-dashboard-layout.html">
+<link rel="import" href="../tf-graph-controls/tf-graph-controls.html">
+<link rel="import" href="../tf-input-pipeline/input-pipeline-analyzer.html">
+<link rel="import" href="../tf-overview-page/overview-page.html">
+<link rel="import" href="../tf-op-profile/tf-op-profile.html">
+<link rel="import" href="../tf-tensorboard/registry.html">
+<link rel="import" href="../vz-sorting/vz-sorting.html">
+
+<!--
+tf-profile-dashboard displays profiling information for different tools.
+
+In the profile dashboard, a "run" is a profile run and "tag" is a tool name. A
+profile run can have multiple tools that present the performance profile as different visualizations
+(e.g. Catapult TraceViewer).
+-->
+
+<dom-module id="tf-profile-dashboard">
+<template>
+<template is="dom-if" if="[[_dataNotFound]]">
+  <div style="max-width: 540px; margin: 80px auto 0 auto;">
+    <h3>No profile data was found.</h3>
+    <p>To collect a profile, you need to run your model on Google Cloud TPUs and
+    capture the trace information while your model is running. You may want to
+    check out the
+    <a href="https://github.com/tensorflow/tensorboard/blob/1.6/tensorboard/plugins/profile/README.md">README</a>
+    and perhaps the
+    <a
+     href="https://cloud.google.com/tpu/docs/cloud-tpu-tools"
+    >tutorial</a> on how to use the
+    <a href="https://pypi.python.org/pypi/cloud-tpu-profiler">cloud-tpu-profiler</a>.
+    </p>
+    <p>
+    If you’re new to TPUs, and want to find out how
+    to run models, check out the
+    <a href="https://cloud.google.com/tpu/docs/quickstart">Quickstart Using a TPU</a>.
+    </p>
+    <p>
+    If you think profiling is done properly, please see the page of
+    <a href="https://cloud.google.com/tpu/docs/troubleshooting">Google Cloud TPU Troubleshooting and FAQ</a>
+    and consider filing an issue on GitHub.</p>
+  </div>
+</template>
+<template is="dom-if" if="[[!_dataNotFound]]">
+  <tf-dashboard-layout>
+  <div class="sidebar">
+    <div class="allcontrols">
+      <div class="sidebar-section">
+        <div class="title">Runs <span class="counter">([[_datasets.length]])</span></div>
+        <paper-dropdown-menu no-label-float no-animations noink class="run-dropdown">
+          <paper-menu id="select" class="dropdown-content" selected="{{selectedDataset}}" slot="dropdown-content">
+            <template is="dom-repeat" items="[[_datasets]]">
+              <paper-item>[[item.name]]</paper-item>
+            </template>
+          </paper-menu>
+        </paper-dropdown-menu>
+      </div>
+      <div class="sidebar-section">
+        <div class="title">Tools <span class="counter">([[_activeTools.length]])</span></div>
+        <paper-dropdown-menu no-label-float no-animations noink class="run-dropdown">
+          <paper-menu id="select" class="dropdown-content" selected="{{selectedTool}}" slot="dropdown-content">
+            <template is="dom-repeat" items="[[_activeTools]]">
+              <paper-item>[[item]]</paper-item>
+            </template>
+            <template is="dom-if" if="[[!_hasActiveTools(selectedDataset, _datasets)]]" restamp="true">
+              <paper-item>None</paper-item>
+            </template>
+          </paper-menu>
+        </paper-dropdown-menu>
+      </div>
+      <div class="sidebar-section"></div>
+    </div>
+  </div>
+  <div class="center">
+    <template is="dom-if" if="[[_isCurrentTool(_datasets, currentSelected, 'trace_viewer')]]" restamp="true">
+      <iframe
+        id="tv_iframe"
+        height="100%"
+        width="100%"
+        src="[[_traceDataUrl]]">
+      </iframe>
+    </template>
+    <template is="dom-if" if="[[_isCurrentTool(_datasets, currentSelected, 'op_profile')]]" restamp="true">
+      <tf-op-profile run="[[_getSelectedDataset(_datasets, currentSelected)]]">
+      </tf-op-profile>
+    </template>
+    <template is="dom-if" if="[[_isCurrentTool(_datasets, currentSelected, 'input_pipeline_analyzer')]]" restamp="true">
+      <input-pipeline-analyzer run="[[_getSelectedDataset(_datasets, currentSelected)]]">
+      </input-pipeline-analyzer>
+    </template>
+    <template is="dom-if" if="[[_isCurrentTool(_datasets, currentSelected, 'overview_page')]]">
+      <overview-page run="[[_getSelectedDataset(_datasets, currentSelected)]]">
+      </overview-page>
+    </template>
+  </div>
+  </tf-dashboard-layout>
+</template>
+<style include="dashboard-style"></style>
+
+<style>
+  .center {
+    position: relative;
+    height: 100%;
+  }
+  iframe {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+</style>
+
+</template>
+<script>
+  "use strict";
+
+
+
+  Polymer({
+    is: "tf-profile-dashboard",
+    properties: {
+      _requestManager: {
+        type: Object,
+        value: () => new tf_backend.RequestManager(),
+      },
+      _isAttached: Boolean,
+      // Whether this dashboard is initialized. This dashboard should only be
+      // initialized once.
+      _initialized: Boolean,
+      _dataNotFound: Boolean,
+      // The endpoint that serves trace viewer app.
+      traceViewerBaseUrl: {
+        type: String,
+        value: "/trace_viewer_index.html",
+      },
+      // The URL for the trace data being display.
+      _traceDataUrl: {
+        type: String,
+        value: "",
+      },
+      _datasets: {
+        type: Array,
+        notify: true,
+        observer: '_datasetsChanged'
+      },
+      _activeTools: {
+        type: Array,
+        computed: '_getActiveTools(selectedDataset, _datasets)'
+      },
+      selectedDataset: {
+        type: Number,
+        notify: true,
+        value: 0,
+        observer: '_selectedDatasetChanged'
+      },
+      selectedTool: {
+        type: Number,
+        notify: true,
+        value: 0,
+        observer: '_selectedToolChanged'
+      },
+      // currentSelected will depends on selectedDataset and selectedTool.
+      // With this arrangement, we can achieve cascading Polymer effects
+      // propagation and atomic change of both dataset and tool.(e.g.
+      // when dataset change, the tool set to the first available one).
+      currentSelected: {
+        type: Number,
+        notify: true,
+        value: () => { return {'datasetIndex': 0, 'toolIndex': 0} },
+      },
+    },
+    reload: function() {
+    },
+    ready: function() {
+    },
+    observers: [
+      '_maybeInitializeDashboard(_isAttached)',
+      '_maybeUpdateTool(_datasets, currentSelected)',
+    ],
+    attached: function() {
+      this.set('_isAttached', true);
+    },
+    detached: function() {
+      this.set('_isAttached', false);
+    },
+    _maybeInitializeDashboard: function(isAttached) {
+      if (this._initialized || !isAttached) {
+        // Either this dashboard is already initialized ... or we are not yet
+        // ready to initialize.
+        return;
+      }
+      // Set this to true so we only initialize once.
+      this._initialized = true;
+      const profileTagsURL =
+        tf_backend.getRouter().pluginRoute('profile', '/tools') +
+        (tf_backend.getRouter().isDemoMode() ? '.json' : '');
+      this._requestManager.request(profileTagsURL).then((runToTool) => {
+        var datasets = _.map(runToTool, (tools, run) => ({
+          name: run,
+          activeTools: tools,
+        }));
+        datasets.sort((a, b) => {
+          // The run name is currently a timestamp like "YYYY-MM-DD_HH:MM:SS".
+          // Sort runs by timestamp in reversed order so that the latest run
+          // comes first.
+          return 0 - vz_sorting.compareTagNames(a.name, b.name);
+        });
+        this.set('_dataNotFound', datasets.length === 0);
+        this.set('_datasets', datasets);
+      });
+    },
+    _getSelectedTool: function(datasets, currentSelected) {
+      var activeTools = this._getActiveTools(currentSelected.datasetIndex, datasets);
+      if (currentSelected.toolIndex >= 0 && currentSelected.toolIndex < activeTools.length) {
+        return activeTools[currentSelected.toolIndex];
+      }
+      return null;
+    },
+    _getSelectedDataset: function(datasets, currentSelected) {
+      if (currentSelected.datasetIndex >= datasets.length) return null;
+      return datasets[currentSelected.datasetIndex].name;
+    },
+    _maybeUpdateTool: function(datasets, currentSelected) {
+      var currentTool = this._getSelectedTool(datasets, currentSelected);
+      if (currentTool == null) return;
+      if (currentTool == "trace_viewer") {
+        var trace_data_url = tf_backend.addParams(
+            tf_backend.getRouter().pluginRoute('profile', '/data'),
+            {tag: 'trace_viewer', run: this._getSelectedDataset(datasets, currentSelected)});
+        // Make the trace data url relative to the root.
+        if (trace_data_url[0] != '/') {
+          trace_data_url = '/' + trace_data_url;
+        }
+        // Pass the URL of trace data via GET parameter to the iframed trace
+        // viewer app.
+        this._traceDataUrl = this.traceViewerBaseUrl + "?trace_data_url=" +
+                            encodeURIComponent(trace_data_url);
+        return;
+      }
+    },
+    _datasetsChanged: function(newDatasets, oldDatasets) {
+      if (oldDatasets != null || this.selected == null) {
+        // Select the first dataset by default.
+        this.set('selectedDataset', 0);
+        this.set('currentSelected', {'datasetIndex': 0, 'toolIndex': 0});
+      }
+    },
+    _selectedDatasetChanged: function(newDataset, oldDataset) {
+      if (this._datasets) {
+        // Display the first tool by default when switching to another run.
+        this.set('currentSelected', {'datasetIndex': newDataset, 'toolIndex': 0});
+
+        // Same tool can have differernt index in different runs, therefore we force a change of
+        // 'selectedTool', to make sure the label of the dropdown-menu is synced.
+        this.async(function() {
+          this.set('selectedTool', undefined);
+          this.set('selectedTool', 0);
+        }.bind(this));
+      }
+    },
+    _selectedToolChanged: function(newTool, oldTool) {
+      if (this._datasets && !(newTool === undefined)) {
+        this.set('currentSelected', {'datasetIndex': this.selectedDataset, 'toolIndex': newTool});
+      }
+    },
+    _getActiveTools: function(selectedDataset, datasets) {
+      if (datasets && selectedDataset < datasets.length) {
+        return datasets[selectedDataset].activeTools;
+      }
+      return [];
+    },
+    _hasActiveTools: function(selectedDataset, datasets) {
+      return datasets[selectedDataset].activeTools.length > 0;
+    },
+    _isCurrentTool: function(datasets, currentSelected, expected) {
+      return this._getSelectedTool(datasets, currentSelected) == expected;
+    },
+  });
+
+  tf_tensorboard.registerDashboard({
+    plugin: 'profile',
+    elementName: 'tf-profile-dashboard',
+    isReloadDisabled: true,
+  });
+
+</script>
+</dom-module>
