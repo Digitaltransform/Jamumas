@@ -1,5 +1,9 @@
-# TensorBoard [![GitHub Actions CI](https://github.com/tensorflow/tensorboard/workflows/CI/badge.svg)](https://github.com/tensorflow/tensorboard/actions?query=workflow%3ACI+branch%3Amaster+event%3Apush) [![Compat check PyPI](https://python-compatibility-tools.appspot.com/one_badge_image?package=tensorboard)](https://python-compatibility-tools.appspot.com/one_badge_target?package=tensorboard)
+# JamuMass
+Saat ini menggunakan sarana informasi untuk umum bersumber dari kemasan informasi dalam Data Center yang didirikan pada tempat ini [![Jamu Mass](https://img.shields.io/badge/Jamu%20Mass-Public%20Mediaverse-orange)](https://github.com/Digitaltransform/AMHNEWS)
 
+The Project of Jamumas Template Uses and Source of Repositories as follows
+# TensorBoard [![GitHub Actions CI](https://github.com/tensorflow/tensorboard/workflows/CI/badge.svg)](https://github.com/tensorflow/tensorboard/actions?query=workflow%3ACI+branch%3Amaster+event%3Apush) [![Compat check PyPI](https://python-compatibility-tools.appspot.com/one_badge_image?package=tensorboard)](https://python-compatibility-tools.appspot.com/one_badge_target?package=tensorboard)
+Jamumas uses tempalate and paltform from sourced repositories as follow
 TensorBoard is a suite of web applications for inspecting and understanding your
 TensorFlow runs and graphs.
 
